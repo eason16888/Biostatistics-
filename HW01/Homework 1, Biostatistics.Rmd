@@ -1,0 +1,324 @@
+---
+title: "Homework 1, Biostatistics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library('tidyverse')
+```
+
+
+# Q1
+```{r}
+prop.test(12,85,p=0.5,alt='two.sided',conf.level = 0.95)
+binom.test(12,85,p=0.5,alt='two.sided',conf.level = 0.95)
+binom.test(12,85,p=0.5,alt='two.sided',conf.level = 0.99)
+prop.test(12,85,alt='two.side',correct = F)
+```
+1.the confidence interval for spleen rate at $\alpha = 0.05$ is (0.07513135,0.3362462)    
+2.the confidence interval for spleen rate at $\alpha = 0.01$ is (0.06036021,0.26403358)
+
+# --------------------------------------------------------------------------------
+# Q2 
+
+## (a) 
+
+we can create a table     
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     4        15           19
+   case     2        13           15
+  Total     6        28           34
+  
+Table: table0
+
+# if $H_{0}: p1 = p2$  vs  $H_{1}: p1 > p2$
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     5        14           19
+   case     1        14           15
+  Total     6        28           34
+  
+Table: table1
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     6        13           19
+   case     0        15           15
+  Total     6        28           34
+  
+Table: table2
+
+p_value = Pr(table1|$H_0$) + Pr(table2|$H_0$) + Pr(table0|$H_0$)
+```{r}
+p_value=0
+for (i in c(4:6)){
+  p_value = p_value + choose(6,i)*choose(28,19-i)/choose(34,19)
+}
+print(p_value)
+```
+
+check
+```{r}
+m=matrix(c(4,2,15,13),c(2,2),dimnames = list(c('control','streptokinase'),c('died','survival')))
+fisher.test(m,alt='greater')$p.value
+```
+
+# if $H_{0}: p1 = p2$  vs  $H_{1}: p1 < p2$
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     3        16           19
+   case     3        12           15
+  Total     6        28           34
+  
+Table: table3
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     2        17           19
+   case     4        11           15
+  Total     6        28           34
+  
+Table: table4
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     1        18           19
+   case     5        10           15
+  Total     6        28           34
+  
+Table: table5
+
+            dead   survival     Total
+-------     ------ ----------   -------
+control     0        19           19
+   case     6        9            15
+  Total     6        28           34
+  
+Table: table6
+
+p_value = Pr(table3|$H_0$) + Pr(table4|$H_0$) +  Pr(table5|$H_0$) +  Pr(table6|$H_0$) + Pr(table0|$H_0$)
+
+```{r}
+p_value=0
+for (i in c(4:0)){
+  p_value = p_value + choose(6,i)*choose(28,19-i)/choose(34,19)
+}
+print(p_value)
+```
+
+check
+```{r}
+m=matrix(c(4,2,15,13),c(2,2),dimnames = list(c('control','streptokinase'),c('died','survival')))
+fisher.test(m,alt='less')$p.value
+```
+
+# if $H_{0}: p1 = p2$  vs  $H_{1}: p1 \neq p2$   
+
+p-value = take sum all table when Pr(tablei|$H_0$) < Pr(table0|$H_0$)
+```{r}
+p_value=0
+for (i in c(0:6)){
+  r= choose(6,i)*choose(28,19-i)/choose(34,19)
+  if (r<=choose(6,4)*choose(28,19-4)/choose(34,19)){
+    p_value = p_value + r
+  }
+}
+print(p_value)
+```
+
+check
+```{r}
+m=matrix(c(4,2,15,13),c(2,2),dimnames = list(c('control','streptokinase'),c('died','survival')))
+fisher.test(m,)$p.value
+```
+
+## (b)
+
+```{r}
+m=matrix(c(4,2,15,13),c(2,2),dimnames = list(c('control','streptokinase'),c('died','survival')))
+chisq.test(m)
+```
+## Conclusion : whether fisher exact test or chi_square test always do not reject $H_0$ (i.e mortality rate is equal)
+
+## (c)
+
+power = 90% ,P1 = 0.2        
+
+$H_0:P2 = 0.2 \  vs\ H_1:P2 \neq 0.2$         
+at $\alpha$=0.05        
+$\hat{P_1}$ ~ $N(0.2,0.16/n)$     
+$\hat{P_2}$ ~ $N(P_2,P_2(1-P_2)/n)$     
+$\hat{P_2}-\hat{P_1}$ ~ $N((P_2-0.2),(0.16+P_2(1-P_2))/n)$      
+critical region = $\frac{\hat{P_2}-\hat{P_1}}{\sqrt{0.32/n}}$ > $z_{\alpha/2}$      
+                = $\hat{P_2}-\hat{P_1}$ > $z_{\alpha/2} \times \sqrt{\frac{32}{n}}$
+
+0.45 = Pr(critical region | $H_1$ is true)
+     = Pr($\hat{P_2}-\hat{P_1}$ > $z_{\alpha/2} \times \sqrt{\frac{32}{n}}$|P2)        
+0.45 = Pr(Z > $(z_{\alpha/2} \times \sqrt{\frac{32}{n}}-(P_2-0.2))$ / $\sqrt{\frac{0.16+P_2(1-P_2)}{n}}$)
+
+and $z_{0.45} = 0.3264$     
+
+$n^{1/2} = (-0.3264 \times \sqrt{0.16 +  P_2(1-P_2)} + 1.96\times \sqrt{0.32}) /(P_2-0.2)$
+ 
+```{r}
+ceiling_dec <- function(x, level=1) round(x + 5*10^(-level-1), level)
+
+number=function(p2){
+  ans1<-((-0.3264*(0.16+p2*(1-p2))**0.5 - 1.96*(0.32)**0.5) /(p2-0.2))**(2)
+#  ans2<-((-0.3264*(0.16+p2*(1-p2))**0.5 + 1.96*(0.32)**0.5) /(p2-0.2))**(2)
+#  ans = ceiling_dec(c(ans1,ans2),0)
+  return (ans1)
+}
+p2=seq(0,1,0.008)
+plot(c(p2),number(p2),type='l')
+```
+
+at $\alpha$=0.01 
+
+```{r}
+number=function(p2){
+  ans1<-((-0.3264*(0.16+p2*(1-p2))**0.5 - 2.33*(0.32)**0.5) /(p2-0.2))**(2)
+  ans2<-((-0.3264*(0.16+p2*(1-p2))**0.5 + 2.33*(0.32)**0.5) /(p2-0.2))**(2)
+  ans = ceiling_dec(c(ans1,ans2),0)
+  return (ans)
+}
+p2=seq(0,1,0.01)
+plot(c(p2,p2),number(p2))
+```
+
+# ----------------------------------------------------------------------------------
+
+# Q3
+## (a)
+$H_{0}: p = 0.25$  vs  $H_{1}: p \neq 0.25$
+```{r}
+Variable = c('ID number','Age','FEV','Height','Sex','Smoking status')
+data=read.table("FEV.TXT",col.names=Variable)
+binom.test(sum(data['FEV']>3),length(data[[1]]),p=0.25,alt='two.sided')
+prop.test(sum(data['FEV']>3),length(data[[1]]),p=0.25,alt='two.sided')
+```
+# Conclusion : since p-value = 0.0004967 or 0.0004285 < 0.05 = $\alpha$ Thus reject $H_0$ (i.e the proportion of having perfect pulmonary function is not equal to 0.25 ) 
+
+## (b)
+$H_{0}: odds\ ratio = 1$  vs  $H_{1}: odds\ ratio \neq 1$ 
+```{r}
+data['perfect_pulmonary'] = as.factor(data['FEV']>3)
+
+table_Sex_and_perfect_pulmonary <- data%>%
+  group_by(Sex,perfect_pulmonary)%>%
+  summarise(n=n())
+
+table(data$Sex,data$FEV>3)
+m = matrix(table_Sex_and_perfect_pulmonary$n,c(2,2),dimnames = list(c('Female','male'),c('no','yes')),byrow = T)
+print(m)
+```
+
+```{r}
+R1=m[2,2]/(m[2,1]+m[2,2])
+R0=m[1,2]/(m[1,1]+m[1,2])
+odds1=R1/(1-R1)
+odds0=R0/(1-R0)
+OR = odds1/odds0
+cat('odds ratio is ',OR)
+```
+check
+```{r}
+fisher.test(m)$estimate
+```
+
+```{r}
+chisq.test(m,correct = T)
+prop.test(m[1:2,2],rowSums(m))
+```
+
+```{r}
+prop.test(m[1:2,2],rowSums(m),alt='less')
+```
+# Conclusion : since p_value = 0.000633 < 0.05 = $\alpha$ , Thus reject $H_0$(i.e odds ratio $\neq$ 1) , furthermore male is superior than female at perfect_pulmonary
+
+## (c)
+```{r}
+data['age_class']=1
+data['age_class'][4<data['Age'] & data['Age']<10] = 1
+data['age_class'][9<data['Age'] & data['Age']<15] = 2
+data['age_class'][14<data['Age'] & data['Age']<20] = 3
+
+table_age_class_and_perfect_pulmonary <- data%>%
+  group_by(age_class,perfect_pulmonary)%>%
+  summarise(n=n())
+
+m = matrix(table_age_class_and_perfect_pulmonary$n,c(3,2),dimnames = list(c('5~9','10~14','15~20'),c('no','yes')),byrow = T)
+print(m)
+```
+
+$H_{0}: P1 = P2 = P3$  vs  $H_{1}: not H_0$     
+the number of perfect_pulmonary in 5~9 is binomal distibution (309,P1) P1 代表 5~9 中 perfect_pulmonary 的比例        
+the number of perfect_pulmonary in 10~14 is binomal distibution (296,P2) P2 代表 10~14 中 perfect_pulmonary 的比例         
+the number of perfect_pulmonary in 15~20 is binomal distibution (49,P3) P3 代表 15~20 中 perfect_pulmonary 的比例   
+```{r}
+chisq.test(m,correct = T)
+```
+Conclusion : p_value << 0.05 = $\alpha$ , reject $H_0$ (i.e 比例不同)
+
+$H_{0}: P1 = P2$  vs  $H_{1}: P1 < P2$
+```{r}
+prop.test(m[1:2,2],rowSums(m)[1:2],correct = T,alt='less')
+```
+Conclusion : p_value << 0.05 = $\alpha$ , reject $H_0$(i.e 10~14 比 5~9 have a higher proportion of having perfect pulmonary function)        
+
+$H_{0}: P2 = P3$  vs  $H_{1}: P2 < P3$
+```{r}
+prop.test(m[2:3,2],rowSums(m)[2:3],correct = T,alt='less')
+```
+Conclusion : p_value=0.00208 < 0.05 = $\alpha$ , reject $H_0$(i.e 15~20 比 10~14 have a higher proportion of having perfect pulmonary function)
+
+# ---------------------------------------------------------------------------------
+
+# Q4
+
+## (a)
+
+$P_i$ 代表各城市中 Number children with caries free teeth 的比例 
+```{r}
+m=matrix(c(243,16,83,36,60,32,31,31,39,12),c(2,5),dimnames = list(c('Number_children_with_caries','Number_children_with_caries_free_teeth'),c('Essex','Slough','Harwick','Burnham','Meresa')))
+```
+
+$H_{0}: P1 = P2 = P3 = P4 = P5$  vs  $H_{1}: not H_0$
+```{r}
+chisq.test(m)
+prop.test(m[2,],colSums(m))
+```
+# Conclusion : since p-value << 0.05 = $\alpha$ ,Thus reject $H_0$ 
+
+## (b)
+```{r}
+prop.test(m[2,4:5],colSums(m[1:2,4:5]),alt='greater')
+```
+Express P4>P5
+
+```{r}
+p = c(0.06177606 , 0.30252101 , 0.34782609 , 0.50000000 , 0.23529412 )
+N = length(p)
+value = critical.range = c()
+
+## Compute critical values.
+for (i in 1:(N-1))
+   { for (j in (i+1):N)
+    {
+     value = c(value,(abs(p[i]-p[j])))
+     critical.range = c(critical.range,
+      sqrt(qchisq(.95,4))*sqrt(p[i]*(1-p[i])/300 + p[j]*(1-p[j])/300))
+    }
+   }
+
+m=round(cbind(value,critical.range),3)
+m[,1] > m[,2]
+```
+Can see that      
+(P1 , P2),(P1 , P3),(P1 , P4),(P1 , P5)       
+(P2 , P4),(P3 , P4),(P4 , P5) there are different ,but not express proportions of children caries free teeth high with fluoride high

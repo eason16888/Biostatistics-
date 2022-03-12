@@ -1,0 +1,386 @@
+---
+title: "310657002_統計碩_林奕勳_hw03"
+output: html_document
+---
+```{r}
+library(survival)
+library(nnet)
+library(MASS)
+```
+
+define function for remove missing value
+```{r}
+remove_miss_value = function(data)
+{
+  if (sum(is.na(data)) != 0) 
+  {
+    miss_value_index = c()
+    for(i in 1:dim(data)[2])
+    {
+       miss_value_index = c(miss_value_index,which(is.na(data[,i])==1))
+    }
+    data = data[-miss_value_index,]
+  }
+
+  return (data)
+}
+```
+
+# read data
+```{r }
+data_1 = read.table('http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/HEALTH.TXT', header=TRUE)
+data_2 = read.table('http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/HOSPITAL.TXT', header=TRUE)
+data_3 = read.table('http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/MES.TXT' , header=TRUE)
+```
+
+# Q1
+(a)
+```{r,message=F}
+data_1 = remove_miss_value(data_1)
+Q1_a_crude = glm(BH ~ GENDER , data = data_1 , family='binomial')
+cat('the crude odds ratio is coefficient of GENDER' , exp(Q1_a_crude$coefficients[2]) ,'\n')
+cat('95% crude odds ratio CI is ' , exp(confint(Q1_a_crude,level=0.95 )[2,]),'\n')
+
+Q1_a_adj_sex = glm(BH ~ GENDER+AGE , data = data_1 , family='binomial')
+cat('the odds ratio is coefficient of GENDER' , exp(Q1_a_adj_sex$coefficients[2]) ,'\n')
+cat('95% GENDER odds ratio CI with adjust AGE is ' , exp(confint(Q1_a_adj_sex,level=0.95 ))[2,],'\n')
+
+summary(Q1_a_adj_sex)
+```
+(b)
+```{r}
+Q1_b_age_dummy1 = rep(0 , dim(data_1)[1])
+Q1_b_age_dummy2 = rep(0 , dim(data_1)[1])
+Q1_b_age_dummy3 = rep(0 , dim(data_1)[1])
+Q1_b_age_dummy4 = rep(0 , dim(data_1)[1])
+Q1_b_age_dummy1[data_1['AGE'] <= 7] = 1
+Q1_b_age_dummy2[7<data_1['AGE']&data_1['AGE']<=11] = 1
+Q1_b_age_dummy3[11<data_1['AGE']&data_1['AGE']<=15] = 1
+Q1_b_age_dummy4[data_1['AGE']>15] = 1
+Gender = data_1$GENDER
+
+data_1_copy = data_1
+data_1_copy['AGE_stratum'] = 1
+data_1_copy[7<data_1_copy['AGE']&data_1_copy['AGE']<=11,'AGE_stratum'] = 2
+data_1_copy[11<data_1_copy['AGE']&data_1_copy['AGE']<=15,'AGE_stratum'] = 3
+data_1_copy[data_1_copy['AGE']>15,'AGE_stratum'] = 4
+
+logistic_dummy_for_age = glm(data_1$BH ~ Gender+Q1_b_age_dummy2+Q1_b_age_dummy3+Q1_b_age_dummy4 , family='binomial')
+logistic_stratum_for_age = glm(BH ~ Gender+AGE_stratum , data = data_1_copy , family='binomial')
+
+summary(logistic_dummy_for_age)
+summary(logistic_stratum_for_age)
+```
+(c)
+```{r,message=F}
+# model by (b)
+cat('95% stratum variable odds ratio CI with adjust gender is ' , exp(confint(logistic_stratum_for_age,level=0.95 )[2,]),'\n')
+
+fisher.test(table(Gender,data_1$BH))
+cat('use 2by2 table find that the 95% CI is 0.4532729 , 0.9213363')
+```
+(d)
+
+(1)
+if use continuous variable with AGE , then need assumption is linear with BH , (i.e  every one unit increase in AGE is constant when holding all other variables are fixed.) AGE and Gender have not interaction ,and Independence
+
+(2)
+if use stratum variable with AGE , then need assumption group is linear with BH (age not need linear) , AGE and Gender have not interaction, and Independence
+
+(3)
+I think use stratum is more appropriate than continuous , since AIC of stratum is smaller than continuous
+and AGE is more significance (i.e p-value is smaller), and Independence
+
+(e)
+```{r}
+cat('the odds ratio  coefficien of AGE(continuous)' , exp(Q1_a_adj_sex$coefficients[3]) ,'\n')
+```
+mean is one unit increase in AGE odds ratio will increase 0.9680644 when holding all other variables are fixed
+
+and p-value is 0.0180 for AGE(continuous)
+```{r}
+cat('the odds ratio is coefficien of AGE(stratum)' , exp(logistic_stratum_for_age$coefficients[3]) ,'\n')
+```
+mean is one unit increase in age-stratum odds ratio will increase 0.8096271 when holding all other variables are fixed
+
+and p-value is 0.00677  for AGE(stratum)
+
+(f)
+```{r}
+logistic_stratum_for_age_GHb = glm(BH ~ Gender+AGE_stratum+GHb , data = data_1_copy , family='binomial')
+summary(logistic_stratum_for_age)
+summary(logistic_stratum_for_age_GHb)
+```
+I think GHb is not confounding effect for AGE and Gender , since coefficient is similar
+
+(g)
+```{r}
+logistic_interaction = glm(BH ~ Gender+AGE_stratum+GHb+Gender:GHb, data = data_1_copy , family='binomial')
+logistic = glm(BH ~ Gender+AGE_stratum+GHb, data = data_1_copy , family='binomial')
+
+summary(logistic_interaction)
+summary(logistic)
+```
+I think Gender and GHb  is not interaction since p-value = 0.0.730854 > 0.05
+
+Interpret with interaction 
+
+(1)
+GHb increase one unit , log odds ratio decrease (0.15923) for  Gender is male(Gender=0) when other variables are fixed
+
+(2)
+GHb increase one unit , log  odds ratio decrease (0.15923+0.02228) for  Gender is female(Gender=1) when other variables are fixed
+
+(3)
+male(Gender=0) is more than  female log odds ratio (0.20224+0.02228) when other variables are fixed
+
+Interpret without  interaction 
+
+(1)
+male(Gender=0) odds ratio is more than  female log odds ratio (0.44396) when other variables are fixed
+
+(2)
+GHb increase one unit ,log odds ratio decrease (0.16885) when other variables are fixed
+
+# Q2
+```{r}
+data_2 = remove_miss_value(data_2)
+data_2_copy = data_2
+data_2_table = data.frame('Gender'=c(0,0,0,0,1,1,1,1),
+                          'HEALTH'=c(1,2,3,4,1,2,3,4),
+                          'HEALTH2'=c(0,1,0,0,0,1,0,0),
+                          'HEALTH3'=c(0,0,1,0,0,0,1,0),
+                          'HEALTH4'=c(0,0,0,1,0,0,0,1),
+                          'hospitalization'=c(25,38,10,4,25,59,19,3),
+                          'observation'=c(530,514,81,9,381,582,93,10))
+data_2_table['no_hospitalization'] = data_2_table['observation'] - data_2_table['hospitalization']
+HEALTH2 = rep(0,dim(data_2)[1])
+HEALTH3 = rep(0,dim(data_2)[1])
+HEALTH4 = rep(0,dim(data_2)[1])
+HEALTH2[data_2['HEALTH']==2]=1
+HEALTH3[data_2['HEALTH']==3]=1
+HEALTH4[data_2['HEALTH']==4]=1
+data_2_copy['HEALTH2'] = HEALTH2
+data_2_copy['HEALTH3'] = HEALTH3
+data_2_copy['HEALTH4'] = HEALTH4
+```
+(a)
+```{r}
+# goodness-of-fit for group data
+# saturated model
+logistic_Q2_a_saturated_model = glm(cbind(hospitalization,no_hospitalization)~Gender+HEALTH2+HEALTH3+HEALTH4+Gender:HEALTH2+Gender:HEALTH3+Gender:HEALTH4,data=data_2_table,family='binomial')
+
+estimated  = 1/(1+exp(-predict(logistic_Q2_a_saturated_model,data_2_table[,c(1,3,4,5)])))
+estimated = data.frame('estimated'=estimated)
+observed  = data_2_table['hospitalization']/data_2_table['observation']
+names(observed) = 'observed'
+Q2_a_ans = data.frame(estimated,observed)
+Q2_a_ans
+```
+They are the same as the observed probabilities (it is obvious , since we use saturated model)
+
+(b)
+```{r}
+# method one
+Model_1 = glm(cbind(hospitalization,no_hospitalization)~Gender+HEALTH2+HEALTH3+HEALTH4,data=data_2_table,family='binomial')
+Model_2 = glm(cbind(hospitalization,no_hospitalization)~Gender+HEALTH,data=data_2_table,family='binomial')
+Model_3 = glm(cbind(hospitalization,no_hospitalization)~Gender+HEALTH+Gender:HEALTH,data=data_2_table,family='binomial')
+
+diff_deviance = summary(Model_2)$deviance - summary(Model_3)$deviance
+pchisq(diff_deviance, df=1,lower.tail = F)
+```
+I compare Model_2 vs Model_3 since p-value > 0.05 do not reject $H_0$ (i.e interaction term = 0) , so Model_2 is more helpful than Model_3 , and I compare Model_2 vs Model_1 can not use likelihood ratio tests , I think that HEALTH is ordinal data so use stratum variable(Label Encoding) is appropriate so Model_2 is most helpful in predicting HOSP
+
+
+I set intercept model is baseline , compare with three models.
+```{r}
+# method two
+Model_intercept = glm(cbind(hospitalization,no_hospitalization)~1,data=data_2_table,family='binomial')
+
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_1)$deviance
+pchisq(diff_deviance, df=3,lower.tail = F)
+
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_2)$deviance
+pchisq(diff_deviance, df=1,lower.tail = F)
+
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_3)$deviance
+pchisq(diff_deviance, df=2,lower.tail = F)
+```
+and find that model_2 is most significant (p-value is smallest) , have same result with method one
+
+(c)
+```{r}
+cat('saturated model deviance is ',logistic_Q2_a_saturated_model$deviance,'\n')
+cat(' model_1 deviance is ',Model_1$deviance,'\n')
+cat(' model_2 deviance is ',Model_2$deviance,'\n')
+cat(' model_3 deviance is ',Model_3$deviance,'\n')
+
+# goodness-of-fit test  for saturated model with model 1
+diff_deviance = summary(Model_1)$deviance - summary(logistic_Q2_a_saturated_model)$deviance
+pchisq(diff_deviance, df=3,lower.tail = F)
+
+# goodness-of-fit test  for model 2 with model 3
+diff_deviance = summary(Model_2)$deviance - summary(Model_3)$deviance
+pchisq(diff_deviance, df=1,lower.tail = F)
+```
+no matter dummy variable or stratum variable are good fit to the data(i.e  three models provides a significantly good fit to the data) , since goodness-of-fit tests tell about no interactions between HEALTH (or HEALTH dummy variables) and GENDER (i.e  no interaction model fits the observed data well) 
+
+(d)
+```{r}
+data_2_table_copy = data_2_table
+names(data_2_table_copy)[1] = 'GENDER'
+
+#goodness-of-fit forindividual data
+# saturated model
+logistic_Q2_d_saturated_model = glm(HOSP~GENDER+HEALTH2+HEALTH3+HEALTH4+GENDER:HEALTH2+GENDER:HEALTH3+GENDER:HEALTH4,data=data_2_copy,family='binomial')
+
+Model_intercept = glm(HOSP~1,data=data_2_copy,family='binomial')
+Model_1 = glm(HOSP~GENDER+HEALTH2+HEALTH3+HEALTH4,data=data_2_copy,family='binomial')
+Model_2 = glm(HOSP~GENDER+HEALTH,data=data_2_copy,family='binomial')
+Model_3 = glm(HOSP~GENDER+HEALTH+GENDER:HEALTH,data=data_2_copy,family='binomial')
+
+estimated  = 1/(1+exp(-predict(logistic_Q2_d_saturated_model,data_2_table_copy[,c(1,3,4,5)])))
+estimated = data.frame('estimated'=estimated)
+observed  = data_2_table['hospitalization']/data_2_table['observation']
+names(observed) = 'observed'
+Q2_a_ans = data.frame(estimated,observed)
+# (a)
+Q2_a_ans
+```
+estimated probability of HOSP=1 is similar to observed probabilities
+```{r}
+#(b)
+cat('saturated model deviance is ',logistic_Q2_d_saturated_model$deviance,'\n')
+cat(' model_1 deviance is ',Model_1$deviance,'\n')
+cat(' model_2 deviance is ',Model_2$deviance,'\n')
+cat(' model_3 deviance is ',Model_3$deviance,'\n')
+
+# method one
+diff_deviance = summary(Model_1)$deviance - summary(logistic_Q2_d_saturated_model)$deviance
+pchisq(diff_deviance, df=3,lower.tail = F)
+
+diff_deviance = summary(Model_2)$deviance - summary(Model_3)$deviance
+pchisq(diff_deviance, df=1,lower.tail = F)
+
+# method two
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_1)$deviance
+pchisq(diff_deviance, df=3,lower.tail = F)
+
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_2)$deviance
+pchisq(diff_deviance, df=1,lower.tail = F)
+
+diff_deviance = summary(Model_intercept)$deviance - summary(Model_3)$deviance
+pchisq(diff_deviance, df=2,lower.tail = F)
+```
+have same results , Model_2 is most helpful in predicting HOSP
+
+(e)
+
+by (f) we group GHb into groups using R floor(GHb/0.5)
+```{r}
+GHb_categorized = floor(data_2_copy$GHb/0.5)
+GHb_categorized_squ = GHb_categorized^2
+data_2_copy['GHb_categorized'] = GHb_categorized
+data_2_copy['GHb_categorized_squ'] = GHb_categorized_squ
+
+contingency_table_of_GHb = table(data_2_copy$HOSP,data_2_copy$GHb_categorized)
+contingency_table_of_GHb
+
+logistic_GHb_categorized =glm(HOSP~GHb_categorized,data = data_2_copy,family='binomial')
+logistic_GHb_categorized_squ =glm(HOSP~GHb_categorized+GHb_categorized_squ,data = data_2_copy,family='binomial')
+
+summary(logistic_GHb_categorized)
+summary(logistic_GHb_categorized_squ)
+
+log_odds = log(contingency_table_of_GHb[2,]/(contingency_table_of_GHb[1,]+contingency_table_of_GHb[2,]))
+plot(sort(unique(data_2_copy$GHb_categorized)),log_odds)
+```
+
+I drawing a scatter plot, and find that GHb have linear with hospitalization log odds , but not square relationship , and we also can use Wald's test to test relationship
+
+so I think have relationship between hospitalization and GHb , and square term of GHb is not significance  so not need add  square term of GHb , from plot can know that square term of GHb is not necessary .
+
+(f)
+```{r}
+unconditional_ligistic = glm(HOSP~HEALTH2+HEALTH3+HEALTH4+GHb_categorized,data = data_2_copy,family='binomial')
+summary(unconditional_ligistic)
+conditional_ligistic<-clogit(HOSP~HEALTH2+HEALTH3+HEALTH4+strata(GHb_categorized),data = data_2_copy)
+summary(conditional_ligistic)
+```
+I think results is similar from unconditional and conditional logistic regressions , since the coefficient is similar and all p-value are significance  
+
+# Q3
+(a)
+```{r}
+data_3 = remove_miss_value(data_3)
+data_3 = data_3[,-1]
+table_a = table('HIST'=data_3$HIST,'ME'=data_3$ME)
+table_a
+chisq.test(table_a)
+```
+most HIST is no (HIST = 0) , and have Mammography Experience is more than no Experience on HIST = 1 , and I use chi-square test find that p-value < 0.05 , so HIST is not independent with ME
+
+(b)
+The likelihood ratio test as for logistic regressions can be used for goodness-of-fit and 2 degrees of freedom
+```{r}
+HIST = data_3['HIST']
+multires<-multinom(ME~HIST,data=data_3)
+multires_NULL<-multinom(ME~1,data=data_3)
+summary(multires, Wald=T, cor=T)
+
+diff_deviance = multires_NULL$deviance - multires$deviance
+pchisq(diff_deviance, df=2,lower.tail = F)
+```
+since p-value < 0.05 reject $H_0$(i.e coefficient is not zero)
+
+(c)
+```{r}
+ME = data_3[,'ME']
+data_3b_10<-data_3[ME==1 | ME==0,]
+logres_10<-glm(ME~., data = data_3b_10 ,family=binomial)
+summary(logres_10)
+
+data_3b_20<-data_3[ME==2 | ME==0,]
+data_3b_20[data_3b_20['ME']==2,'ME']=1
+logres_20<-glm(ME~., data = data_3b_20 ,family=binomial)
+summary(logres_20)
+
+Q3_c_model = multinom(ME~.,data=data_3)
+summary(Q3_c_model)
+
+p_value_10 = 2*(1-pnorm(abs(0.784373899/0.3239426)))
+p_value_20 = 2*(1-pnorm(abs(-0.009443492/0.2663721)))
+cat('ME = 1 vs ME = 0 p-value of DETC is ',p_value_10)
+cat('ME = 2 vs ME = 0 p-value of DETC is ',p_value_20)
+```
+By Wald tests in (ME = 1 vs ME = 0) is significant , but in (ME = 2 vs ME = 0) is not significant
+
+I guess probable linear assumption not hold
+
+# Repeat (a)-(c) using the proportional odds models
+(a)
+
+since (a) is not model so is similar original (a)
+
+(b)
+```{r}
+polrres<-polr(as.factor(ME)~HIST,data=data_3)
+summary(polrres, cor=T)
+
+polrres_None<-polr(as.factor(ME)~1,data=data_3)
+summary(polrres_None, cor=T)
+
+diff_deviance = polrres_None$deviance - polrres$deviance
+pchisq(diff_deviance, df=2,lower.tail = F)
+```
+since p-value < 0.05 reject $H_0$(i.e coefficient is not zero)
+
+(c)
+```{r}
+polrres_Q3_c<-polr(as.factor(ME)~.,data=data_3)
+summary(polrres_Q3_c, cor=T)
+
+p_value_c = 2*pt(0.8965, df=6,lower.tail = F)
+cat('p-value of DETC is ',p_value_c)
+```
+since p-value > 0.05 do not reject $H_0$(i.e not significant for DETC ) , but I think it can not do this ,by Q3 (c) since (ME = 1 vs ME = 0) odds ratio and (ME = 2 vs ME = 0) odds ratio are not same

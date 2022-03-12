@@ -1,0 +1,446 @@
+---
+title: "final_exam"
+output: html_document
+---
+
+```{r,message=F,warning=F}
+library(gmodels)
+library(epiR)
+library(exact2x2)
+library(fmsb)
+library(psych)
+library(BSDA)
+library(MASS)
+library(DiffXTables)
+library(DAAG)
+library(ResourceSelection)
+library(survival)
+library(KMsurv)
+library(nnet)
+library(Epi)
+```
+
+define remove missing value function
+```{r}
+remove_miss_value = function(data)
+{
+  if (sum(is.na(data)) != 0) 
+  {
+    miss_value_index = c()
+    for(i in 1:dim(data)[2])
+    {
+       miss_value_index = c(miss_value_index,which(is.na(data[,i])==1))
+    }
+    data = data[-miss_value_index,]
+  }
+
+  return (data)
+}
+
+
+remove_miss_value = function(data)
+{
+  if (sum(is.na(data)) != 0)
+  {
+    for(i in 1:dim(data)[2])
+    {
+       data<-data[!is.na(data[,i]),]
+    }
+  }
+  return (data)
+}
+```
+
+read data
+```{r}
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/snore.txt"
+
+# Import the text file into R
+snore<-read.table(fileurl, header=TRUE)
+
+# Import the csv file into R
+#   note: stringsAsFactors=TRUE will screw up conversion to numeric!
+metadata <- read.csv(fileurl, header=TRUE, stringsAsFactors=FALSE)
+```
+
+lect 1,2
+```{r}
+X<-5
+N<-10
+alpha<-0.05
+
+# Exact Binomial test
+binom.test(X, N, p=0.3, alternative="greater", conf.level=1-alpha)
+# Normal approximation (Chi-squared approximation)
+prop.test(X, N, p=0.3, alternative="greater", conf.level=1-alpha, correct=F)
+```
+
+lect 3
+```{r}
+a<-matrix(c(58,63,92,137), ncol=2, dimnames=list(c("Tr 1","Tr 2"), c("Cure","Non-cure")))
+b = matrix(c(58,63,92,137),c(2,2))
+rownames(b) = c("Tr 1","Tr 2")
+colnames(b) = c("Cure","Non-cure")
+# digits 到小數點第幾位
+CrossTable(a, digits=2, expected=T, prop.chisq=F, chisq=T, fisher=T) 
+chisq.test(b)
+fisher.test(b)
+```
+
+lect 4-1
+```{r}
+TAB1<-matrix(c(24,5,22976,22995), ncol=2, dimnames=list(c("OC user","OC non-user"), c("Diseased","Non-diseased")))
+
+epi.2by2(TAB1, method="cohort.count")
+
+TAB2<-matrix(c(96,104,109,666), ncol=2, dimnames=list(c("Alcoholic","Non-alcoholic"), c("Case","Control")))
+
+epi.2by2(TAB2, method="case.control")
+```
+
+lect 4-2
+```{r}
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/metadata.csv"
+metadata <- read.csv(fileurl, header=TRUE, stringsAsFactors=FALSE)
+metadata = remove_miss_value(metadata)
+
+# metastases=1 if yes, 2 no
+# method 1
+metastases = metadata[,"metastases"]
+metastases[metastases==0] = 2
+# method 2
+metadata[metadata['metastases'] == 0,'metastases'] = 2
+# method 3
+metastases1<-metadata[,"metastases"]
+metastases1<-(2-metastases1)
+
+# ERp=1 if ER>10, 2 otherwise
+ER<-metadata[,"ER"]
+ER = rep(2,length(ER))
+ER[metadata['ER']>10] = 1
+
+# create agegrp=1 if age<=45, 2 o.w.
+agegrp = metadata[,"age"]
+agegrp = rep(2,length(agegrp))
+agegrp[metadata[,"age"]<=45] = 1
+
+# method 1
+TAB1<-xtabs(~ERp+metastases+agegrp)
+dimnames(TAB1)<-list(c("ER+","ER-"), c("Metastases yes","Metastases no"), c("Age<=45","Age>45"))
+TAB1
+# method 2
+TAB2 = table(ERp,metastases,agegrp)
+dimnames(TAB2)<-list(c("ER+","ER-"), c("Metastases yes","Metastases no"), c("Age<=45","Age>45"))
+TAB2
+
+TAB1[,,1]
+# Mantel-Haenszel test
+TAB2<-array(c(29,4,131,36,
+              23,60,27,140),
+            dim=c(2,2,2))
+dimnames(TAB2)<-list(c("Smokers","Non-smokers"), c("Lung cancer yes","Lung cancer no"), c("Males","Females"))
+TAB2
+mantelhaen.test(TAB2, correct=F)
+```
+
+lect 6
+```{r}
+# Endometrial cancer matched data 
+TAB2<-matrix(c(27,3,29,4), ncol=2, dimnames=list(c("Case RF+","Case RF-"), c("Control RF+","Control RF-")))
+TAB2
+# McNemar's (Chi-squared) test for Endometrial cancer vs. risk factor
+mcnemar.test(TAB2, correct=F)
+# Exact McNemar's test for disease vs. risk factor
+mcnemar.exact(TAB2)
+# Survey agreement data 
+TAB4<-matrix(c(136,69,92,240), ncol=2, dimnames=list(c("Survey B +","Survey B -"), c("Survey A +","Survey A -")))
+TAB4
+Kappa.test(TAB4)
+```
+
+lect 7
+```{r}
+Oint<-c(37,39,31,39,38,47,35,30,25,40)
+# t test
+t.test(Oint, mu=34, alternative="greater") 
+# sing test
+SIGN.test(Oint, md=34, alternative="greater") 
+binom.test(sum(Oint>34),length(Oint),alt='greater',p=1/2)
+binom.exact(sum(Oint>34),length(Oint),alt='greater')
+
+# Twin paired data
+twin1<-c(659,984,397,574,447,479,676,761,647,402)
+twin2<-c(452,507,460,787,351,277,234,516,577,338)
+# paired t-test for comparing twin1 vs twin2
+t.test(twin1, twin2, paired=T, alternative="greater")
+
+D<-twin1-twin2
+SIGN.test(D, md=0, alternative="greater") # Ho: D_mu=0
+binom.test(sum(D>0),length(D),p=1/2,alt='greater')
+
+# Wilcoxon signed-rank test
+# exact test
+wilcox.test(twin1, twin2, paired=T, exact=T, alternative="greater")
+# Normal approximation
+wilcox.test(twin1, twin2, paired=T, exact=F, correct=F, alternative="greater")
+wilcox.test(D,mu=0,exact=F, correct=F, alternative="greater")
+
+# Two sample test
+aspX<-c(15,26,13,28,17)
+aspY<-c(12,20,10,21,18,22)
+# two-sample t-test for aspX vs. aspY
+var.test(aspX, aspY)
+t.test(aspX, aspY, var.equal=T, alternative="greater")
+t.test(aspX, aspY, var.equal=F, alternative="greater")
+
+# Wilcoxon rank-sum (Mann-Whitney) test
+# exact test
+wilcox.test(aspX, aspY, paired=F, exact=T, alternative="greater")
+# Normal approximation
+wilcox.test(aspX, aspY, paired=F, exact=F, correct=F, alternative="greater")
+
+# more than 2 sample
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/metadata.csv"
+metadata <- read.csv(fileurl, header=TRUE, stringsAsFactors=FALSE)
+J00129<-metadata[,"J00129"]
+ER<-metadata[,"ER"]
+anova(lm(J00129~as.factor(ER)))
+kruskal.test(J00129~as.factor(ER))
+# correlation between two continuous gene expressions J00129 and Contig29982_RC
+Contig29982_RC<-metadata[,"Contig29982_RC"]
+cor.test(J00129, Contig29982_RC, method="pearson")
+# Spearman rank correlation
+cor.test(J00129, ER, method="spearman")
+```
+lect 8
+# Fold-change
+```{r}
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/samplexprs.csv"
+samplexprs <- read.csv(fileurl, header=TRUE, stringsAsFactors=FALSE)
+
+ngene<-dim(samplexprs)[2]-5
+npatient<-dim(samplexprs)[1]
+exprs<-samplexprs[,(5+(1:ngene))]
+genenames<-colnames(exprs)
+fc<-rep(NA, ngene)
+names(fc)<-genenames
+
+exprs1<-exprs[(samplexprs[,"metastases"]==1),]
+exprs0<-exprs[(samplexprs[,"metastases"]==0),]
+# data had take log
+fc<-apply(exprs1,2,mean)-apply(exprs0,2,mean)
+
+plot(fc, ylab="log10(fold-change)", cex=0.5)
+abline(h=log10(3/2), col="red", lty=2)
+text(200, log10(3/2)+0.05, labels="log10(3/2)", col="red")
+abline(h=log10(2/3), col="red", lty=2)
+text(200, log10(2/3)-0.05, labels="log10(2/3)", col="red")
+```
+#  Two-sample t-test
+```{r}
+metastases<-samplexprs[,"metastases"]
+p.ttestS<-rep(NA, ngene)
+names(p.ttestS)<-genenames
+p.ttestW<-rep(NA, ngene)
+names(p.ttestW)<-genenames
+
+metastases_1_group = exprs[samplexprs[,"metastases"]==1,]
+metastases_0_group = exprs[samplexprs[,"metastases"]==0,]
+p_my_t_test=c()
+for(m in 1:ngene)
+{
+  p_my_t_test[m] = t.test(metastases_1_group[,m],metastases_0_group[,m],var.equal=T,na.action="na.omit")$p.value
+  p.ttestS[m]<-t.test(exprs[,m]~metastases, var.equal=T, na.action="na.omit")$p.value
+  p.ttestW[m]<-t.test(exprs[,m]~metastases, var.equal=F, na.action="na.omit")$p.value
+}
+
+# Volcano plot
+plot(fc, -log10(p.ttestS), main="Two-sample t-test with equal variances", xlab="log10(fold-change)", ylab="-log10(p.value)", cex=0.5)
+abline(h=-log10(0.05), col="red", lty=2)
+text(-0.4, -log10(0.05)+0.3, labels="-log10(0.05)", col="red")
+abline(v=0)
+abline(v=log10(3/2), col="red", lty=2)
+text(log10(3/2), 0.2, labels="log10(3/2)", col="red")
+abline(v=log10(2/3), col="red", lty=2)
+text(log10(2/3), 0.2, labels="log10(2/3)", col="red")
+```
+# Wilcoxon rank-sum test
+```{r}
+p.Wilcoxon<-rep(NA, ngene)
+names(p.Wilcoxon)<-genenames
+
+for(m in 1:ngene)
+{
+  p.Wilcoxon[m]<-wilcox.test(exprs[,m]~metastases)$p.value
+}
+
+# Volcano plot
+plot(fc, -log10(p.Wilcoxon), main="Wilcoxon rank-sum test", xlab="log10(fold-change)", ylab="-log10(p.value)", cex=0.5)
+abline(h=-log10(0.05), col="red", lty=2)
+text(-0.4, -log10(0.05)+0.3, labels="-log10(0.05)", col="red")
+abline(v=0)
+abline(v=log10(3/2), col="red", lty=2)
+text(log10(3/2), 0.2, labels="log10(3/2)", col="red")
+abline(v=log10(2/3), col="red", lty=2)
+text(log10(2/3), 0.2, labels="log10(2/3)", col="red")
+```
+# Permutation test
+```{r}
+p.permT<-rep(NA, ngene)
+names(p.permT)<-genenames
+
+for(m in 1:ngene)
+{
+  p.permT[m]<-twotPermutation(x1=exprs1[,m], x2=exprs0[,m], nsim=500, plotit=F)
+}
+
+# Volcano plot
+plot(fc, -log10(p.permT), main="Two-sample t permutation test", xlab="log10(fold-change)", ylab="-log10(p.value)", cex=0.5)
+abline(h=-log10(0.05), col="red", lty=2)
+text(-0.4, -log10(0.05)+0.3, labels="-log10(0.05)", col="red")
+abline(v=0)
+abline(v=log10(3/2), col="red", lty=2)
+text(log10(3/2), 0.2, labels="log10(3/2)", col="red")
+abline(v=log10(2/3), col="red", lty=2)
+text(log10(2/3), 0.2, labels="log10(2/3)", col="red")
+```
+# Multiple comparison procedures
+```{r}
+alpha<-0.05
+
+# Bonferroni 
+pa<-p.adjust(p.Wilcoxon, method="bonferroni")
+sig<-pa<alpha
+print(pa[sig])
+# Holm
+pa<-p.adjust(p.Wilcoxon, method="holm")
+sig<-pa<alpha
+print(pa[sig])
+# Hochberg
+pa<-p.adjust(p.Wilcoxon, method="hochberg")
+sig<-pa<alpha
+print(pa[sig])
+# Benjamini-Hochberg
+pa<-p.adjust(p.Wilcoxon, method="BH")
+sig<-pa<alpha
+print(pa[sig])
+
+npt<-50
+plot(1:npt, sort(p.Wilcoxon)[1:npt], xlab="Indices", ylab="Unadjsuted p-values", cex=0.5)
+lines(1:npt, (1:npt)*alpha/ngene, col="red", lty=1)
+text(npt, npt*alpha/ngene, labels="BH", col="red")
+lines(1:npt, rep(alpha/ngene, npt), col="green", lty=1)
+text(npt, alpha/ngene, labels="Bonferroni", col="green")
+lines(1:npt, rep(1-(1-alpha)^{1/ngene}, npt), col="blue", lty=2)
+text(npt, 1-(1-alpha)^{1/ngene}, labels="Sidak", col="blue")
+lines(1:npt, alpha/(ngene:(ngene-(npt-1))), col="brown", lty=2)
+text(npt, alpha/(ngene-(npt-1)), labels="Holm/Hochberg", col="brown")
+```
+
+lect 10
+```{r}
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/falls.txt"
+falls<-read.table(fileurl, header=TRUE)
+
+DFALL<-falls[,"DFALL"]
+GENDER<-falls[,"GENDER"]
+ADL<-falls[,"ADL"]
+ADL6<-falls[,"ADL6"]
+
+GENDERXADL<-GENDER*ADL
+GENDERXADL6<-GENDER*ADL6
+
+# logistic regression
+# since have 312 data and 3 missing so Null deviance(have intercept) degrees is 312-3-1=308
+# since have 312 data and 3 missing so Residual deviance(two coefficient) degrees is 312-3-2=307
+LOGREG1<-glm(DFALL~ADL, family=binomial)
+summary(LOGREG1)
+```
+lect 11
+```{r}
+# Get the file url
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/snore.txt"
+snore<-read.table(fileurl, header=TRUE)
+for(i in 1:dim(snore)[2])
+{
+   snore<-snore[!is.na(snore[,i]),]
+}
+
+SNORE<-snore[,"SNORE"]
+SBP<-snore[,"SBP"]
+SEX<-snore[,"SEX"]
+
+GENDER<-rep(0, length(SEX))
+GENDER[SEX=="F"]<-1
+GENDER[SEX=="M"]<-0
+
+SBP2<-SBP*SBP
+
+# Likelihood ratio test
+# Large model
+LOGREG1<-glm(SNORE~GENDER+SBP+SBP2, family=binomial)
+summary(LOGREG1)
+# Small model 
+LOGREG2<-glm(SNORE~GENDER, family=binomial)
+summary(LOGREG2)
+#   The difference of -2log(L) 
+LOGREG2$deviance-LOGREG1$deviance
+#   p-value
+1-pchisq(LOGREG2$deviance-LOGREG1$deviance, df=2)
+
+# Goodness-of-fit for grouped data
+# For group-level analysis
+grpdata<-matrix(0, nrow=6, ncol=6)
+dimnames(grpdata)[[2]]<-c('GENDER','SBPgrp','SBPgrp2','SBPgrp3','SNOREy','SNOREn')
+grpdata[,1]<-c(0,0,0,1,1,1)
+grpdata[,2]<-c(1,2,3,1,2,3)
+grpdata[,3]<-c(0,1,0,0,1,0)
+grpdata[,4]<-c(0,0,1,0,0,1)
+grpdata[,5]<-c(96,154,133,96,89,50)
+grpdata[,6]<-c(236,323,217,301,195,92)
+grpdata<-data.frame(grpdata)
+
+#   Fitted model
+LOGREG3<-glm(cbind(SNOREy, SNOREn)~GENDER+SBPgrp2+SBPgrp3, family=binomial, data=grpdata)
+summary(LOGREG3)
+#   Saturated model
+LOGREG4<-glm(cbind(SNOREy, SNOREn)~GENDER+SBPgrp2+SBPgrp3+GENDER:SBPgrp2+GENDER:SBPgrp3, family=binomial, data=grpdata)
+summary(LOGREG4)
+
+# Goodness-of-fit for individual data
+LOGREG5<-glm(SNORE~GENDER+SBP, family=binomial)
+summary(LOGREG5)
+HL<-hoslem.test(LOGREG5$y, fitted(LOGREG5), g=10) # fitted(LOGREG5) = LOGREG5$fitted.values
+HL$observed
+HL$expected
+HL
+```
+
+lect 12
+```{r}
+fileurl <- "http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/snore.txt"
+snore<-read.table(fileurl, header=TRUE)
+snore = remove_miss_value(snore)
+snore['SBPgrp2']=0
+snore[120<snore['SBP']&snore['SBP']<=135,'SBPgrp2']=1
+snore['SBPgrp3']=0
+snore[snore['SBP']>135,'SBPgrp3']=1
+snore["BMI_30"] = snore["BMI"]-30
+snore["BMI_30_square"]  = snore["BMI_30"]**2
+
+# Confounding
+LOGREG1<-glm(SNORE~SBPgrp2+SBPgrp3,data=snore, family=binomial)
+summary(LOGREG1)
+LOGREG2<-glm(SNORE~SBPgrp2+SBPgrp3+BMI_30+BMI_30_square,data=snore, family=binomial)
+summary(LOGREG2)
+# Interaction binary variable
+snore['Gender'] = as.numeric(as.factor(snore[,"SEX"]))
+snore['Gender'] = -1*(snore['Gender'] -2)
+
+LOGREG3<-glm(SNORE~SBPgrp3+Gender+(SBPgrp3:Gender),data = snore, family=binomial)
+summary(LOGREG3)
+# continuous
+LOGREG4<-glm(SNORE~SBPgrp3+BMI_30+(SBPgrp3:BMI_30), data = snore,family=binomial)
+summary(LOGREG4)
+```
+

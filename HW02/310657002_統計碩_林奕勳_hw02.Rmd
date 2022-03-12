@@ -1,0 +1,188 @@
+---
+title: "Homework 2, Biostatistics"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r,message=F,warning=F}
+library(gmodels)
+library(epiR)
+library(exact2x2)
+library(fmsb)
+library(psych)
+library(BSDA)
+library(MASS)
+library(DiffXTables)
+```
+# Q1
+```{r}
+Q1_data=array(c(8,52,5,164,25,29,21,138,50,27,61,208),c(2,2,3),dimnames =list(c('Case','Control'),c('H','L'),c('35~44','45~54','55~64')))
+Q1_data
+```
+
+## Q1 (a)
+```{r}
+mantelhaen.test(Q1_data, correct=F)
+```
+from Mantel-Haenszel test , we can see that p-value < 2.2e-16 , so we reject $H_0$(i.e odds ratio is not equal to 1) , and the common odds ratio is 5.882095
+
+## Q1 (b)
+compare 4 tables (group by age and crude) of odds ratio
+```{r}
+epi.2by2(Q1_data[,,1], method="case.control")
+epi.2by2(Q1_data[,,2], method="case.control")
+epi.2by2(Q1_data[,,3], method="case.control")
+epi.2by2(Q1_data[,,1]+Q1_data[,,2]+Q1_data[,,3], method="case.control")
+```
+find that 4 odds ratio are difference($odds\ ratio_1 =5.05$,$odds\ ratio_2 =5.67$,$odds\ ratio_3 =6.31$,$odds\ ratio_{crude} =4.51$) , so age is confounding and stratify by age is reasonable , if we not stratify by age the analysis have Simpson's Paradox
+
+# --------------------------------------------------------------------------------
+
+# Q2
+```{r}
+Q2_data = array(c(40,16,20,3),c(2,2),dimnames = list(c('A_success','A_failure'),c('B_success','B_success')))
+Q2_data
+```
+
+matched data , McNemar's (Chi-squared) test for antibiotics  vs. gonorrhea and Exact McNemar's test  for antibiotics  vs. gonorrhea
+```{r}
+mcnemar.test(Q2_data, correct=F)
+mcnemar.exact(Q2_data)
+```
+whether approximate or exact p-value > 0.05,do not reject $H_0$(i.e antibiotics A and B in treating gonorrhea effectiveness  is not different) ,  
+
+# --------------------------------------------------------------------------------
+
+# Q3
+```{r}
+Q3_data=array(c(35,21,13,249),c(2,2),dimnames = list(c('B_reviewer_+','B_reviewer_-'),c('A_reviewer_+','A_reviewer_-')))
+Q3_data
+```
+Measure of agreement and its test
+```{r}
+Kappa.test(Q3_data)
+```
+since p-value < 0.05 , reject $H_0$(i.e Kappa coefficient not equal to 0), and estimates is 0.6096187 , mean is Substantial agreement
+
+# --------------------------------------------------------------------------------
+
+# Q4
+
+## Q4(a)
+$X_1,...,X_{10}$ ~ $Bin(20,p)$ where p is Pr($\theta\ \notin CI$) = 0.1
+so Pr($X_1 \leq 3$) = $C^{20}_0 0.9^{20} + C^{20}_1 0.9^{19}0.1^1 + C^{20}_2 0.9^{18}0.1^2 + C^{20}_3 0.9^{17}0.1^3$
+
+so each students  have no more than 3 confidence intervals out of 20 is $(Pr(X_1 \leq 3))^{10}$
+
+```{r}
+probability_no_more_than_3 = pbinom(3,20,0.1)
+probability_no_more_than_3^10
+```
+probability that all 10 students each have no more than 3 confidence intervals that “miss” (i.e., do not contain the true parameter value) out of 20 is 0.242118
+
+## Q4(b)
+we can use goodness of fit test , $H_0 : X\sim Bin(20,0.1)$ vs.$H_1: not\ H_0$
+
+and since the number of X=0 and X=1 is <5 so combin then and the number of X=4 and X>5 is <5 similar
+```{r}
+Q4_data=c(2+4,12,77,5+0)
+chisq.test(Q4_data, p = c(dbinom(0,20,0.1)+dbinom(1,20,0.1),dbinom(2,20,0.1),dbinom(3,20,0.1),dbinom(4,20,0.1)+1-pbinom(4,20,0.1)))
+```
+p-value = 2.2e-16 < 0.05 , reject $H_0$
+
+# --------------------------------------------------------------------------------
+
+# Q5
+$H_0: median\ of\ case = median\ of\ control$ vs. $H_0: median\ of\ case \neq median\ of\ control$
+
+nonparametric test , so use Wilcoxon rank-sum test
+```{r}
+Q5_data_1 = c(60, 25, 6, 8, 5, 10, 25, 15, 10)
+Q5_data_2 = c(13, 20, 15, 7, 75, 120, 10, 100, 9, 25, 30)
+# exact test
+wilcox.test(Q5_data_1, Q5_data_2, paired=F, exact=T, alternative="two.side")
+# Normal approximation
+wilcox.test(Q5_data_1, Q5_data_2, paired=F, exact=F, correct=F, alternative="two.side")
+```
+whether exact or approximation p-value > 0.05 , so do not reject $H_0$ (i.e have equal median) 
+
+
+# --------------------------------------------------------------------------------
+
+# Q6
+```{r}
+Q6_data = matrix(c(243,16,83,36,60,32,31,31,39,12),c(2,5),dimnames = list(c('Number_children_with_caries','Number_children_with_caries_free_teeth'),c('Essex','Slough','Harwick','Burnham','Meresa')))
+```
+
+```{r}
+Q6_data
+```
+
+```{r}
+two_cities_names = c()
+p_value=c()
+for (i in c(1:4)){
+  for (j in c((i+1):5)){
+  two_cities_names = c(two_cities_names,paste(colnames(Q6_data)[i],      colnames(Q6_data)[j], sep="_"))
+  m = matrix( c(Q6_data[,i], Q6_data[,j]),c(2,2))
+  p_value = c(p_value,chisq.test(m)$p.value)
+  }
+}
+names(p_value) = two_cities_names
+p_value
+```
+
+# Bonferroni 
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="bonferroni")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+
+# Sidak
+```{r}
+alpha = 0.05
+adjust_p_palue = 1-(1-p_value)^(length(p_value))
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+
+# Holm
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="holm")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+
+# Hochberg
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="hochberg")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+
+# Benjamini-Hochberg
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="BH")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+We then plot ordered unadjusted p-values vs. indices compared to various multiple comparison procedures.
+```{r}
+len = length(p_value)
+plot(c(1:len),sort(p_value), xlab="Indices", ylab="Unadjsuted p-values")
+lines(1:len, (1:len)*alpha/len, col="red", lty=1)
+text(len, len*alpha/len, labels="BH", col="red")
+lines(1:len, rep(alpha/len, len), col="green", lty=1)
+text(len, alpha/len, labels="Bonferroni", col="green")
+lines(1:len, rep(1-(1-alpha)^{1/len}, len), col="blue", lty=2)
+text(len, 1-(1-alpha)^{1/len}, labels="Sidak", col="blue")
+lines(1:len, alpha/(len:(len-(len-1))), col="brown", lty=2)
+text(len, alpha/(len-(len-1)), labels="Holm/Hochberg", col="brown")
+```
+

@@ -1,0 +1,135 @@
+---
+title: "310657002_統計碩_林奕勳_hw04"
+output: html_document
+---
+
+```{r}
+library(survival)
+library(KMsurv)
+library(lubridate )
+```
+
+
+```{r}
+# load data
+data = read.table('http://ghuang.stat.nctu.edu.tw/course/biostat21/files/data/STAN.TXT',header = T)
+```
+
+```{r}
+# define function change date ex:(11/05/64 -> 1964-11-05) and new name is 'change_date'
+change_date  = function(data,date)
+{
+  new_names = paste(c('change',date),collapse ='_')
+  data[new_names] = '.'
+  for (i in 1:dim(data)[1])
+  {
+    if (!(data[i,date]=='.'))
+    {
+      year = paste('19',strsplit(data[,date],'/')[[i]][3],sep='')
+      month = strsplit(data[,date],'/')[[i]][1]
+      day = strsplit(data[,date],'/')[[i]][2]
+      data[i,new_names] = paste(c(year,month,day),collapse ='-')
+    }
+    else # if no transplant , I use DLS instead
+    {
+      year = paste('19',strsplit(data[,'DLS'],'/')[[i]][3],sep='')
+      month = strsplit(data[,'DLS'],'/')[[i]][1]
+      day = strsplit(data[,'DLS'],'/')[[i]][2]
+      data[i,new_names] = paste(c(year,month,day),collapse ='-')      
+    }
+  }
+  return(data)
+}
+```
+
+```{r}
+# define function for difference date
+diff_date = function(data,start,end,name,unit='day')
+{
+
+    st <- as.Date(data[,start])
+    en <- as.Date(data[,end])
+    dt <- time_length(difftime(en, st),unit)
+    data[name] = round(dt)+1
+
+  return(data)
+}
+```
+
+```{r}
+# change date
+data = change_date(data,'DOB')
+data = change_date(data,'DOA')
+data = change_date(data,'DOT')
+data = change_date(data,'DLS')
+# create variables for difference date (ex:survival time , age)
+data = diff_date(data,'change_DOA','change_DLS','SURV1')
+data = diff_date(data,'change_DOT','change_DLS','SURV2')
+data = diff_date(data,'change_DOA','change_DOT','WAIT')
+data = diff_date(data,'change_DOB','change_DOA','AGEACCPT',unit='year')
+data = diff_date(data,'change_DOB','change_DOT','AGETRANS',unit='year')
+```
+# a
+```{r}
+survival_a = survfit(Surv(SURV1, DEAD)~SURG, data=data,  type=c("kaplan-meier"))
+plot(survival_a,lty=1:2)
+legend(1000, 1, c("none", " had surgery"),lty=1:2)
+survdiff(Surv(SURV1, DEAD)~SURG, data=data)
+```
+since p-value is 0.04 < 0.05 , so we reject $H_0$(survival function or Hazard function is difference)
+
+# b
+```{r}
+# I use 'diff_date' had define failure time as the time from acceptance to heart transplant (i.e., WAIT).
+survival_b = survfit(Surv(WAIT, TRANS)~SURG, data=data,  type=c("kaplan-meier"))
+plot(survival_b,lty=1:2)
+legend(600, 1, c("none", " had surgery"),lty=1:2)
+survdiff(Surv(WAIT, TRANS)~SURG, data=data)
+```
+since p-value is 0.8 > 0.05 , so we do not reject $H_0$(survival function or Hazard function is same) , it is obvious since patients with or without prior open-heart surgery prior to DOA is independent with wait acceptance to heart transplant time
+
+# c
+```{r}
+model_c<-coxph(Surv(SURV1, DEAD)~SURG+AGEACCPT, ties="breslow", data=data)
+summary(model_c)
+survival_c<-survfit(model_c)
+plot(survival_c, xlab='Disease free survival time (days)', ylab='Disease free survival proportion')
+```
+since both p-value are small than 0.05 , so I think both covariates are have linear with log Hazard function , and SURG coefficient mean is had open-heart surgery log Hazard will decrease 0.76911 unit hold others covariates is fixed , and  AGEACCPT mean is change one unit then log Hazard will increase 0.03041 unit hold others covariates is fixed.
+
+# d
+```{r}
+data <- data[order(data$SURV1),]
+new_data <- data[rep(1:dim(data)[1], each=2),]
+odd = rep(c(1,0),time=dim(data)[1])==1
+even = rep(c(0,1),time=dim(data)[1])==1
+# 先將 DEAD = 0 設定搞定
+# 先將所有star = 0
+new_data['start'] = 0
+# 將所有 stop = SURV1 
+new_data[odd,'stop'] = new_data[odd,'SURV1']
+
+# 再來搞定 DEAD = 1
+# 將 DEAD = 1 的第一次 DEAD 設成 0
+new_data[c(odd & new_data$TRANS==1),'DEAD'] = 0
+# 將 DEAD = 1 的第一次 stop 設成 WAIT
+new_data[c(odd & new_data$TRANS==1),'stop'] = new_data[c(odd & new_data$TRANS==1),'WAIT']
+# 將 DEAD =1 的第一次 DEAD 設成 0
+new_data[c(odd & new_data$TRANS==1),'TRANS'] = 0
+# 將 DEAD = 1 的第二次 start 設成 WAIT
+new_data[c(even & new_data$TRANS==1),'start'] = new_data[c(even & new_data$TRANS==1),'WAIT']
+# 將 DEAD = 1 的第二次 stop 設成 SURV1
+new_data[c(even & new_data$TRANS==1),'stop'] = new_data[c(even & new_data$TRANS==1),'SURV1']
+# remove DEAD = 0 的第二次
+new_data = new_data[!is.na(new_data$stop),]
+
+PHM_d <- coxph(Surv(start, stop, DEAD)~TRANS+AGEACCPT+SURG, ties="efron", data=new_data)
+summary(PHM_d)
+```
+
+```{r}
+survival_d<-survfit(PHM_d)
+plot(survival_d)
+```
+
+covariates AGEACCPT and SURG  are significance (p-value < 0.05) , it is same result of (c) , so I think not  need consider  TRANS term 

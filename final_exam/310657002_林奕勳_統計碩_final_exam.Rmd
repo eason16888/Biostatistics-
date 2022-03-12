@@ -1,0 +1,207 @@
+---
+title: "310657002_林奕勳_統計碩_final_exam"
+output: html_document
+---
+
+```{r,message=F,warning=F}
+library(gmodels)
+library(epiR)
+library(exact2x2)
+library(fmsb)
+library(psych)
+library(BSDA)
+library(MASS)
+library(DiffXTables)
+library(DAAG)
+library(ResourceSelection)
+library(survival)
+library(KMsurv)
+library(nnet)
+library(Epi)
+library(survival)
+library(KMsurv)
+library(lubridate )
+```
+
+read data
+```{r}
+data <- read.csv('cancerdat.csv', header=TRUE)
+```
+
+# Q1
+```{r}
+# create Jexpr
+Jexpr = rep(2,dim(data)[1])
+Jexpr[data$J00129 <= -0.3] = 1
+Jexpr[data$J00129 > -0.1] = 3
+
+Q1_table = table(data$EVENTmeta , Jexpr)
+Q1_table
+```
+
+```{r}
+names = c()
+p_value=c()
+for (i in c(1:2)){
+  for (j in c((i+1):3)){
+  names = c(names,paste(colnames(Q1_table)[i], colnames(Q1_table)[j], sep="_"))
+  m = matrix( c(Q1_table[,i], Q1_table[,j]),c(2,2))
+  p_value = c(p_value,chisq.test(m)$p.value)
+  }
+}
+p_value
+```
+# Bonferroni
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="bonferroni")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+# Holm
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="holm")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+
+# Benjamini-Hochberg
+```{r}
+alpha = 0.05
+adjust_p_palue = p.adjust(p_value, method="BH")
+sig = adjust_p_palue < alpha
+print(adjust_p_palue[sig])
+```
+since adjust p-value > 0.05 , we can find that three Jexpr are not reject $H_0$(i.e three Jexpr are independent)
+
+# Q2
+```{r}
+Q2_table = table(data$EVENTmeta , Jexpr , data$Posnodes)
+Q2_table
+```
+# a
+```{r}
+fisher.test(Q2_table[,1:2 ,1])$estimate
+fisher.test(Q2_table[,1:2 ,2])$estimate
+mantelhaen.test(Q2_table[,1:2 ,], correct=F)
+
+fisher.test(Q2_table[,2:3 ,1])$estimate
+fisher.test(Q2_table[,2:3 ,2])$estimate
+mantelhaen.test(Q2_table[,2:3 ,], correct=F)
+
+fisher.test(Q2_table[,-2 ,1])$estimate
+fisher.test(Q2_table[,-2 ,2])$estimate
+mantelhaen.test(Q2_table[,-2 ,], correct=F)
+```
+find that the odd ratio are similar (compare Jexpr=1 vs. Jexpr=2 )$OR_1 = 0.4941395  ,OR_2 = 0.8430299  , OR_{crude} = 0.6196485 $ ,others odds ratio also similar, so I think lymph node status is not a confounder , and from (d,e) logistic regression find if remove 'Posnodes' term the coefficient is similar.
+
+# b
+```{r}
+Q2_b_table<-matrix(0, nrow=6, ncol=7)
+dimnames(Q2_b_table)[[2]]<-c('Posnodes','SBPgrp','SBPgrp1','SBPgrp2','SBPgrp3','EVENTmeta_y','EVENTmeta_n')
+Q2_b_table[,1] = c(0,0,0,1,1,1)
+Q2_b_table[,2] = c(1,2,3,1,2,3)
+Q2_b_table[,3] = c(1,0,0,1,0,0)
+Q2_b_table[,4] = c(0,1,0,0,1,0)
+Q2_b_table[,5] = c(0,0,1,0,0,1)
+Q2_b_table[,6] = c(31,13,10,12,18,17)
+Q2_b_table[,7] = c(41,35,21,23,41,33)
+
+Q2_b_table = as.data.frame(Q2_b_table)
+#   Saturated model
+Q2_b_model<-glm(cbind(EVENTmeta_y, EVENTmeta_n)~Posnodes+SBPgrp2+SBPgrp3+Posnodes:SBPgrp2+Posnodes:SBPgrp3, family=binomial, data=Q2_b_table)
+summary(Q2_b_model)
+
+estimated  = 1/(1+exp(-predict(Q2_b_model,Q2_b_table[,c(1,4,5)])))
+estimated = data.frame('estimated'=estimated)
+observed  = Q2_b_table[,6]/(Q2_b_table[,6]+Q2_b_table[,7])
+names(observed) = 'observed'
+Q2_a_ans = data.frame(estimated,observed)
+Q2_a_ans
+```
+since is Saturated model so have same coefficients 
+
+# c
+
+from b model , we just see coefficients of Posnodes          
+```{r}
+Q2_c_model<-glm(cbind(EVENTmeta_y, EVENTmeta_n)~Posnodes+SBPgrp1+SBPgrp3+Posnodes:SBPgrp1+Posnodes:SBPgrp3, family=binomial, data=Q2_b_table)
+summary(Q2_c_model)
+low =exp( 0.24846  - 1.96*0.50310     )
+up = exp(0.24846 + 1.96*0.50310    )
+cat('the 95% confidence interval of the odds ratio ',c(low,up))
+```
+I use medium expression be a baseline and fit logistic regression model , so we just see coefficient of SBPgrp3 .
+# d
+```{r}
+Q2_d_model<-glm(cbind(EVENTmeta_y, EVENTmeta_n)~Posnodes+SBPgrp2+SBPgrp3, family=binomial, data=Q2_b_table)
+summary(Q2_d_model)
+
+1-pchisq(Q2_d_model$deviance-Q2_b_model$deviance, df=2)
+```
+by likelihood ratio test p-value = 0.639 > 0.05 , so do not reject $H_0$(interaction = 0) , and we can find interaction of Saturated model , the p-value also < 0.05 , it is not significant
+
+# e
+```{r}
+Q2_e_model_1<-glm(cbind(EVENTmeta_y, EVENTmeta_n)~SBPgrp2+SBPgrp3, family=binomial, data=Q2_b_table)
+summary(Q2_e_model_1)
+
+1-pchisq(Q2_e_model_1$deviance-Q2_b_model$deviance, df=3)
+
+intercept_model<-glm(cbind(EVENTmeta_y, EVENTmeta_n)~1, family=binomial, data=Q2_b_table)
+summary(intercept_model)
+1-pchisq(intercept_model$deviance-Q2_b_model$deviance, df=5)
+```
+Use goodness-of-fit find that the intercept_model fit well , and the intercept term is  significant
+
+# Q3
+# a
+```{r}
+Prognosis  = rep(0,dim(data)[1])
+Prognosis [data$conservFlag == 0 & data$C1used > 0.4 ] = 1
+Prognosis [data$conservFlag != 0 & data$C1used > 0.55 ] = 1
+Q3_table = table(Prognosis )
+names(Q3_table)= c('poor','good')
+Q3_table
+```
+
+# b 
+we can use chi-square test 
+```{r}
+table(Prognosis ,data$EVENTmeta)
+chisq.test(table(Prognosis ,data$EVENTmeta))
+
+
+Q3_b_model = glm(data$EVENTmeta~Prognosis , family=binomial)
+Q3_b_model_base = glm(data$EVENTmeta~1 , family=binomial)
+summary(Q3_b_model)
+```
+from chi-square test show that p-value < 0.05 ,  reject $H_0$(i.e then are dependent) , and we can use logistic regression predict .
+
+# c
+```{r}
+survival_c = survfit(Surv(TIMEsurvival, EVENTdeath)~Prognosis , data=data,  type=c("kaplan-meier"))
+plot(survival_c,lty=1:2)
+legend(12, 1, c("negative", " positive "),lty=1:2)
+survdiff(Surv(TIMEsurvival, EVENTdeath)~Prognosis , data=data)
+```
+from test we can find that p-value < 0.05 , so not reject $H_0$(i.e two survival curves are difference)
+
+# d
+```{r}
+data_ESR1 = data[data$ESR1==1,]
+data_ESR0 = data[data$ESR1==0,]
+
+survival_e_ESR1 = survfit(Surv(TIMEsurvival, EVENTdeath)~Posnodes , data=data_ESR1,  type=c("kaplan-meier"))
+plot(survival_e_ESR1,lty=1:2)
+legend(12, 1, c("negative", " positive "),lty=1:2)
+survdiff(Surv(TIMEsurvival, EVENTdeath)~Posnodes , data=data_ESR1)
+
+survival_e_ESR0 = survfit(Surv(TIMEsurvival, EVENTdeath)~Posnodes , data=data_ESR0,  type=c("kaplan-meier"))
+plot(survival_e_ESR0,lty=1:2)
+legend(12, 1, c("negative", " positive "),lty=1:2)
+survdiff(Surv(TIMEsurvival, EVENTdeath)~Posnodes , data=data_ESR0)
+```
+
+I group by ESR1 , and respectively plot two survival curves
